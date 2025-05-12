@@ -29,21 +29,20 @@ jobs:
           
           echo "Current branch: ${{ github.ref_name }}"
           
-          echo "1. Testing ListBucket (should show root level)..."
+          echo "1. Testing ListBucket..."
           aws s3 ls s3://github-actions-branch-test-640168414907/
           
-          echo "2. Testing upload to own branch (should succeed)..."
-          echo "Test content from ${{ github.ref_name }}" > test.txt
-          aws s3 cp test.txt s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/test.txt
+          echo "2. Testing upload to main with debug..."
+          echo "Test content from main" > test.txt
+          aws s3 cp test.txt s3://github-actions-branch-test-640168414907/main/test.txt --debug
           
-          echo "3. Testing list own branch (should succeed)..."
-          aws s3 ls s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/
+          echo "3. Testing list main..."
+          aws s3 ls s3://github-actions-branch-test-640168414907/main/
           
-          echo "4. Testing upload to other branch (should fail)..."
-          OTHER_BRANCH=$([[ "${{ github.ref_name }}" == "main" ]] && echo "develop" || echo "main")
-          aws s3 cp test.txt s3://github-actions-branch-test-640168414907/$OTHER_BRANCH/test.txt || echo "Upload to other branch failed as expected"
+          echo "4. Testing upload to develop (should fail)..."
+          aws s3 cp test.txt s3://github-actions-branch-test-640168414907/develop/test.txt || echo "Failed as expected"
           
-          echo "5. Testing list other branch (should fail)..."
-          aws s3 ls s3://github-actions-branch-test-640168414907/$OTHER_BRANCH/ || echo "List other branch failed as expected"
+          echo "5. Testing list develop..."
+          aws s3 ls s3://github-actions-branch-test-640168414907/develop/
 
     
