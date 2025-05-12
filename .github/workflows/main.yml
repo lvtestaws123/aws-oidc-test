@@ -1,4 +1,4 @@
-name: S3 Branch Access Test
+name: S3 Branch Access Debug
 on:
   push:
     branches: [ main, develop ]
@@ -22,23 +22,22 @@ jobs:
           aws-region: us-east-1
           role-session-name: ${{ github.ref_name }}
 
-      - name: Test branch isolation
+      - name: Debug S3 access
         run: |
           echo "Current identity:"
           aws sts get-caller-identity
           
-          echo "1. Testing access to own branch..."
-          echo "Content from ${{ github.ref_name }}" > test.txt
-          aws s3 cp test.txt "s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/test.txt"
+          echo "Listing bucket contents:"
+          aws s3 ls s3://github-actions-branch-test-640168414907/
           
-          echo "2. Testing access to other branch (should fail)..."
-          OTHER_BRANCH=$([[ "${{ github.ref_name }}" == "main" ]] && echo "develop" || echo "main")
-          aws s3 ls "s3://github-actions-branch-test-640168414907/$OTHER_BRANCH/" && echo "❌ Branch isolation failed" || echo "✅ Branch isolation working"
+          echo "Trying to list own branch prefix:"
+          aws s3 ls "s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/"
           
-          echo "3. Testing upload to other branch (should fail)..."
-          aws s3 cp test.txt "s3://github-actions-branch-test-640168414907/$OTHER_BRANCH/test.txt" && echo "❌ Branch isolation failed" || echo "✅ Branch isolation working"
+          echo "Attempting to upload to own branch:"
+          echo "Test content" > test.txt
+          aws s3 cp test.txt "s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/test.txt" --debug
           
-          echo "4. Cleaning up..."
-          aws s3 rm "s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/test.txt"
+          echo "Attempting to read from own branch:"
+          aws s3 cp "s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/test.txt" - --debug
 
     
