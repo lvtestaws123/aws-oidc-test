@@ -20,7 +20,10 @@ jobs:
         with:
           role-to-assume: arn:aws:iam::640168414907:role/github-oidc-role
           aws-region: us-east-1
-          role-session-name: ${{ github.ref_name }}
+          role-session-name: GitHubActions
+          role-session-tagging: true
+          role-tags: |
+            GitHubBranch=${{ github.ref_name }}
       
       - name: Test S3 Access
         run: |
