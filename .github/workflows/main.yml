@@ -1,4 +1,4 @@
-name: S3 Branch Access Test
+name: S3 Branch Isolation Test
 on:
   push:
     branches: [ main, develop ]
@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 jobs:
-  s3-test:
+  s3-isolation-test:
     runs-on: ubuntu-latest
     
     steps:
@@ -22,52 +22,50 @@ jobs:
           aws-region: us-east-1
           role-session-name: ${{ github.ref_name }}
 
-      - name: Debug AWS identity
+      - name: Verify AWS Identity
         run: |
-          echo "Identity and role information:"
+          echo "Current identity and role session:"
           aws sts get-caller-identity
-          echo "RoleSessionName: ${{ github.ref_name }}"
+          echo "Branch: ${{ github.ref_name }}"
           
-          echo "Testing S3 access..."
+          echo "Initial bucket contents:"
           aws s3 ls s3://github-actions-branch-test-640168414907/
 
-      - name: Test branch access
+      - name: Test Own Branch Access
         run: |
-          echo "1. Testing upload to branch prefix..."
-          mkdir -p test
-          echo "Test content from ${{ github.ref_name }}" > test/test.txt
+          echo "1. Testing write access to own branch (${{ github.ref_name }})..."
+          echo "Test content from ${{ github.ref_name }} branch at $(date)" > test.txt
           
-          # Test branch-specific access
-          BRANCH_PATH="${{ github.ref_name }}"
-          echo "Using branch path: $BRANCH_PATH"
-          aws s3 cp test/test.txt "s3://github-actions-branch-test-640168414907/$BRANCH_PATH/test.txt" \
-            --debug \
-            || echo "❌ Upload failed"
+          echo "Uploading to own branch prefix..."
+          aws s3 cp test.txt "s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/test.txt"
           
-          if [ $? -eq 0 ]; then
-            echo "2. Testing list..."
-            aws s3 ls "s3://github-actions-branch-test-640168414907/$BRANCH_PATH/"
-            
-            echo "3. Testing download..."
-            aws s3 cp "s3://github-actions-branch-test-640168414907/$BRANCH_PATH/test.txt" -
-            
-            echo "4. Testing cleanup..."
-            aws s3 rm "s3://github-actions-branch-test-640168414907/$BRANCH_PATH/test.txt"
-          fi
+          echo "2. Verifying content..."
+          aws s3 ls "s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/"
+          aws s3 cp "s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/test.txt" - 
 
-      - name: Test access restrictions
+      - name: Test Cross-Branch Access
+        run: |
+          echo "3. Testing access restrictions..."
+          OTHER_BRANCH=$([[ "${{ github.ref_name }}" == "main" ]] && echo "develop" || echo "main")
+          echo "Attempting access to $OTHER_BRANCH branch..."
+          
+          echo "3a. Trying to list other branch (should fail):"
+          aws s3 ls "s3://github-actions-branch-test-640168414907/$OTHER_BRANCH/" && echo "❌ Can list other branch" || echo "✅ List blocked as expected"
+          
+          echo "3b. Trying to upload to other branch (should fail):"
+          aws s3 cp test.txt "s3://github-actions-branch-test-640168414907/$OTHER_BRANCH/test.txt" && echo "❌ Can write to other branch" || echo "✅ Write blocked as expected"
+          
+          echo "3c. Trying to read from other branch (should fail):"
+          aws s3 cp "s3://github-actions-branch-test-640168414907/$OTHER_BRANCH/existing.txt" - && echo "❌ Can read from other branch" || echo "✅ Read blocked as expected"
+
+      - name: Cleanup
         if: always()
         run: |
-          echo "Testing cross-branch access..."
-          OTHER_BRANCH=$([[ "${{ github.ref_name }}" == "main" ]] && echo "develop" || echo "main")
+          echo "4. Cleaning up..."
+          aws s3 rm "s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/test.txt"
           
-          echo "Attempting to access $OTHER_BRANCH (should fail):"
-          aws s3 ls "s3://github-actions-branch-test-640168414907/$OTHER_BRANCH/" \
-            && echo "❌ List succeeded unexpectedly" \
-            || echo "✅ List blocked as expected"
-          
-          aws s3 cp test/test.txt "s3://github-actions-branch-test-640168414907/$OTHER_BRANCH/test.txt" \
-            && echo "❌ Upload succeeded unexpectedly" \
-            || echo "✅ Upload blocked as expected"
+          echo "Final bucket contents:"
+          aws s3 ls s3://github-actions-branch-test-640168414907/ --recursive
+
 
     
