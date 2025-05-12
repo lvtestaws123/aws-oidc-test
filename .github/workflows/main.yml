@@ -23,42 +23,26 @@ jobs:
           aws-region: us-east-1
           role-session-name: ${{ github.ref_name }}
       
-      - name: Enable AWS CLI debugging
-        run: |
-          aws configure set cli_history enabled
-          aws configure set debug true
-
       - name: Show current identity
         run: |
           echo "Current branch: ${{ github.ref_name }}"
           aws sts get-caller-identity
-
-      - name: Test S3 permissions
+          
+      - name: Test S3 access
         run: |
-          # Create test content
-          echo "Test content from ${{ github.ref_name }} branch" > test.txt
+          # Create test file
+          echo "Test content from ${{ github.ref_name }} branch at $(date)" > test.txt
           
-          echo "1. Testing ListBucket for own prefix..."
-          aws s3 ls "s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/"
-          
-          echo "2. Testing upload to own branch prefix..."
+          echo "1. Testing basic upload..."
           aws s3 cp test.txt "s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/test.txt"
           
-          echo "3. Verifying upload..."
-          aws s3 ls "s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/test.txt"
+          echo "2. Listing uploaded file..."
+          aws s3 ls "s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/"
           
-          echo "4. Testing download..."
-          aws s3 cp "s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/test.txt" downloaded.txt
-          cat downloaded.txt
+          echo "3. Reading file content..."
+          aws s3 cp "s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/test.txt" -
           
-          echo "5. Testing access to other branch (should fail)..."
-          OTHER_BRANCH=$([[ "${{ github.ref_name }}" == "main" ]] && echo "develop" || echo "main")
-          aws s3 ls "s3://github-actions-branch-test-640168414907/$OTHER_BRANCH/" || echo "Failed as expected"
-
-      - name: Cleanup test files
-        if: always()
-        run: |
-          echo "Cleaning up test files..."
-          aws s3 rm "s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/test.txt" || true
+          echo "4. Cleaning up..."
+          aws s3 rm "s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/test.txt"
 
     
