@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 jobs:
-  s3-branch-test:
+  s3-test:
     runs-on: ubuntu-latest
     
     steps:
@@ -22,28 +22,36 @@ jobs:
           aws-region: us-east-1
           role-session-name: ${{ github.ref_name }}
 
-      - name: Test branch-based access
+      - name: Debug identity and permissions
         run: |
           echo "Current identity:"
           aws sts get-caller-identity
           echo "Branch: ${{ github.ref_name }}"
           
-          USERID=$(aws sts get-caller-identity --query UserId --output text)
-          echo "UserId: $USERID"
+          echo "Listing bucket root:"
+          aws s3 ls s3://github-actions-branch-test-640168414907/
+
+      - name: Test branch access
+        run: |
+          echo "Testing branch prefix..."
+          echo "Test content" > test.txt
           
-          echo "1. Testing own branch access..."
-          echo "Test content from ${{ github.ref_name }}" > test.txt
-          aws s3 cp test.txt "s3://github-actions-branch-test-640168414907/$USERID/test.txt"
+          echo "1. Trying upload..."
+          aws s3 cp test.txt "s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/test.txt" \
+            --debug
           
-          echo "2. Verifying own branch content..."
-          aws s3 ls "s3://github-actions-branch-test-640168414907/$USERID/"
-          aws s3 cp "s3://github-actions-branch-test-640168414907/$USERID/test.txt" -
-          
-          echo "3. Testing access to other prefix (should fail)..."
-          aws s3 ls "s3://github-actions-branch-test-640168414907/other/" || echo "✅ Cannot list other prefix"
-          aws s3 cp test.txt "s3://github-actions-branch-test-640168414907/other/test.txt" || echo "✅ Cannot write to other prefix"
-          
-          echo "4. Cleanup..."
-          aws s3 rm "s3://github-actions-branch-test-640168414907/$USERID/test.txt"
+          if [ $? -eq 0 ]; then
+            echo "2. Trying download..."
+            aws s3 cp "s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/test.txt" -
+            
+            echo "3. Trying cleanup..."
+            aws s3 rm "s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/test.txt"
+          fi
+
+      - name: Test non-branch access
+        run: |
+          echo "Testing non-branch access (should fail)..."
+          aws s3 cp test.txt "s3://github-actions-branch-test-640168414907/other/test.txt" || \
+            echo "✅ Access denied as expected"
 
     
