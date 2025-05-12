@@ -36,7 +36,7 @@ jobs:
           echo "1. Testing basic upload..."
           aws s3 cp test.txt "s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/test.txt"
           
-          echo "2. Listing uploaded file..."
+          echo "2. Listing own branch prefix..."
           aws s3 ls "s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/"
           
           echo "3. Reading file content..."
@@ -44,8 +44,21 @@ jobs:
           
           echo "4. Testing branch isolation..."
           OTHER_BRANCH=$([[ "${{ github.ref_name }}" == "main" ]] && echo "develop" || echo "main")
-          echo "Attempting to access $OTHER_BRANCH (should fail)..."
-          aws s3 ls "s3://github-actions-branch-test-640168414907/$OTHER_BRANCH/" || echo "Branch isolation working as expected"
+          echo "Attempting to list other branch prefix (should fail)..."
+          if aws s3 ls "s3://github-actions-branch-test-640168414907/$OTHER_BRANCH/"; then
+            echo "❌ Branch isolation failed - was able to list other branch"
+            exit 1
+          else
+            echo "✅ Branch isolation working - could not list other branch"
+          fi
+          
+          echo "Attempting to read from other branch (should fail)..."
+          if aws s3 cp "s3://github-actions-branch-test-640168414907/$OTHER_BRANCH/test.txt" test2.txt; then
+            echo "❌ Branch isolation failed - was able to read from other branch"
+            exit 1
+          else
+            echo "✅ Branch isolation working - could not read from other branch"
+          fi
           
           echo "5. Cleaning up..."
           aws s3 rm "s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/test.txt"
@@ -56,13 +69,16 @@ jobs:
           aws s3 ls "s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/"
 
       - name: Summary
+        if: always()
         run: |
           echo "Test Summary:"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Role ARN: $(aws sts get-caller-identity --query 'Arn' --output text)"
+          echo "-----------------------------------"
           echo "✅ Upload test passed"
           echo "✅ List operation test passed"
           echo "✅ Read operation test passed"
           echo "✅ Delete operation test passed"
-          echo "Branch: ${{ github.ref_name }}"
-          echo "Role ARN: $(aws sts get-caller-identity --query 'Arn' --output text)"
+          echo "❓ Branch isolation test results above"
 
     
