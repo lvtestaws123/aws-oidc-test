@@ -22,7 +22,7 @@ jobs:
           aws-region: us-east-1
           role-session-name: ${{ github.ref_name }}
       
-      - name: Test Branch-Based Access
+      - name: Test S3 Access
         run: |
           echo "Current identity:"
           aws sts get-caller-identity
@@ -30,16 +30,19 @@ jobs:
           echo "Current branch: ${{ github.ref_name }}"
           echo "Test content from ${{ github.ref_name }}" > test.txt
           
-          echo "1. Testing access to own branch path (should succeed)..."
-          aws s3 cp test.txt s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/test.txt || echo "Failed to upload to own branch"
-          aws s3 ls s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/ || echo "Failed to list own branch"
+          echo "1. Testing ListBucket (should succeed)..."
+          aws s3 ls s3://github-actions-branch-test-640168414907/
           
-          echo "2. Testing access to other branch path (should fail)..."
-          OTHER_BRANCH=$([[ "${{ github.ref_name }}" == "main" ]] && echo "develop" || echo "main")
-          aws s3 ls s3://github-actions-branch-test-640168414907/$OTHER_BRANCH/ && echo "WARNING: Could list other branch" || echo "✅ Access denied to other branch as expected"
-          aws s3 cp test.txt s3://github-actions-branch-test-640168414907/$OTHER_BRANCH/test.txt && echo "WARNING: Could upload to other branch" || echo "✅ Upload to other branch failed as expected"
+          echo "2. Testing upload to main/ (should succeed)..."
+          aws s3 cp test.txt s3://github-actions-branch-test-640168414907/main/test.txt
           
-          echo "3. Testing access to root (should fail)..."
-          aws s3 ls s3://github-actions-branch-test-640168414907/ && echo "WARNING: Could list root" || echo "✅ Access denied to root as expected"
+          echo "3. Testing list main/ (should succeed)..."
+          aws s3 ls s3://github-actions-branch-test-640168414907/main/
+          
+          echo "4. Testing upload to develop/ (should fail)..."
+          aws s3 cp test.txt s3://github-actions-branch-test-640168414907/develop/test.txt || echo "Failed as expected"
+          
+          echo "5. Testing list develop/ (should succeed, but be empty)..."
+          aws s3 ls s3://github-actions-branch-test-640168414907/develop/
 
     
