@@ -21,11 +21,17 @@ jobs:
           role-to-assume: arn:aws:iam::640168414907:role/github-oidc-role
           aws-region: us-east-1
           role-session-name: ${{ github.ref_name }}
-
       
       - name: Test AWS access
         run: |
           echo "Running on branch: ${{ github.ref_name }}"
+          
+          # Debug information
+          echo "Assumed role ARN:"
+          aws sts get-caller-identity --query 'Arn' --output text
+          
+          echo "Listing S3 buckets:"
+          aws s3 ls
           
           # Try to list objects in current branch path
           echo "Listing objects in current branch path:"
