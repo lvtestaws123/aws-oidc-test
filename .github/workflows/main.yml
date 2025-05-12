@@ -29,7 +29,14 @@ jobs:
           echo "Uploading to branch path..."
           aws s3 cp test.txt s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/test.txt
           
-          echo "Listing branch path..."
+          echo "Listing own branch path..."
           aws s3 ls s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/
+          
+          echo "Attempting to list other branch (should fail)..."
+          OTHER_BRANCH=$([[ "${{ github.ref_name }}" == "main" ]] && echo "develop" || echo "main")
+          aws s3 ls s3://github-actions-branch-test-640168414907/$OTHER_BRANCH/ || echo "Access denied as expected"
+
+          echo "Attempting to upload to other branch (should fail)..."
+          aws s3 cp test.txt s3://github-actions-branch-test-640168414907/$OTHER_BRANCH/test.txt || echo "Upload to other branch failed as expected"
 
     
