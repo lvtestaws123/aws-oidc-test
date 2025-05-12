@@ -20,25 +20,16 @@ jobs:
         with:
           role-to-assume: arn:aws:iam::640168414907:role/github-oidc-role
           aws-region: us-east-1
-          role-session-name: GitHubActions
-          role-session-tagging: true
-          role-tags: |
-            GitHubBranch=${{ github.ref_name }}
       
-      - name: Test branch-based access
+      - name: Test S3 Access
         run: |
           echo "Current branch: ${{ github.ref_name }}"
-          echo "Testing access to own branch path..."
-          
-          # Create and upload test file
           echo "Test content from ${{ github.ref_name }}" > test.txt
+          
+          echo "Uploading to branch path..."
           aws s3 cp test.txt s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/test.txt
           
-          # List contents
-          echo "Listing own branch path:"
+          echo "Listing branch path..."
           aws s3 ls s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/
-          
-          # Try to access other branch (should fail)
-          echo "Attempting to access other branch (should fail):"
-          OTHER_BRANCH=$([[ "${{ github.ref_name }}" == "main" ]] && echo "develop" || echo "main")
-          aws s3 ls s3://github-actions-branch-test-640168414907/$OTHER_BRANCH/ || echo "Access denied as expected"
+
+    
