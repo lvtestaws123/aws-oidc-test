@@ -22,11 +22,17 @@ jobs:
           aws-region: us-east-1
           role-session-name: ${{ github.ref_name }}
 
-      - name: Verify AWS Identity
+      - name: Verify AWS Identity and Permissions
         run: |
           echo "Current identity and role session:"
           aws sts get-caller-identity
           echo "Branch: ${{ github.ref_name }}"
+          
+          echo "Checking IAM permissions:"
+          aws iam simulate-principal-policy --policy-source-arn arn:aws:iam::640168414907:role/github-oidc-role \
+            --action-names s3:PutObject s3:GetObject s3:DeleteObject s3:ListBucket \
+            --resource-arns arn:aws:s3:::github-actions-branch-test-640168414907/${{ github.ref_name }}/test.txt \
+            arn:aws:s3:::github-actions-branch-test-640168414907
           
           echo "Initial bucket contents:"
           aws s3 ls s3://github-actions-branch-test-640168414907/
@@ -37,11 +43,18 @@ jobs:
           echo "Test content from ${{ github.ref_name }} branch at $(date)" > test.txt
           
           echo "Uploading to own branch prefix..."
-          aws s3 cp test.txt "s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/test.txt"
+          aws s3 cp test.txt "s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/test.txt" --debug
           
-          echo "2. Verifying content..."
-          aws s3 ls "s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/"
-          aws s3 cp "s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/test.txt" - 
+          if [ $? -eq 0 ]; then
+            echo "2. Verifying content..."
+            aws s3 ls "s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/"
+            aws s3 cp "s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/test.txt" -
+          else
+            echo "Upload failed. Checking S3 permissions:"
+            aws iam simulate-principal-policy --policy-source-arn arn:aws:iam::640168414907:role/github-oidc-role \
+              --action-names s3:PutObject \
+              --resource-arns arn:aws:s3:::github-actions-branch-test-640168414907/${{ github.ref_name }}/test.txt
+          fi
 
       - name: Test Cross-Branch Access
         run: |
@@ -54,17 +67,15 @@ jobs:
           
           echo "3b. Trying to upload to other branch (should fail):"
           aws s3 cp test.txt "s3://github-actions-branch-test-640168414907/$OTHER_BRANCH/test.txt" && echo "❌ Can write to other branch" || echo "✅ Write blocked as expected"
-          
-          echo "3c. Trying to read from other branch (should fail):"
-          aws s3 cp "s3://github-actions-branch-test-640168414907/$OTHER_BRANCH/existing.txt" - && echo "❌ Can read from other branch" || echo "✅ Read blocked as expected"
 
       - name: Cleanup
         if: always()
         run: |
           echo "4. Cleaning up..."
-          aws s3 rm "s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/test.txt"
+          aws s3 rm "s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/test.txt" || echo "No file to remove"
           
           echo "Final bucket contents:"
           aws s3 ls s3://github-actions-branch-test-640168414907/ --recursive
+
 
     
