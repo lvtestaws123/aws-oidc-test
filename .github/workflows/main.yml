@@ -1,15 +1,16 @@
-name: AWS OIDC Test
+name: AWS OIDC S3 Branch Access Test
 on:
   push:
     branches: [ main, develop ]
   workflow_dispatch:
 
+permissions:
+  id-token: write
+  contents: read
+
 jobs:
-  aws-test:
+  s3-branch-test:
     runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-      contents: read
     
     steps:
       - name: Git clone the repository
@@ -22,27 +23,42 @@ jobs:
           aws-region: us-east-1
           role-session-name: ${{ github.ref_name }}
       
-      - name: Test S3 Access
+      - name: Enable AWS CLI debugging
         run: |
-          echo "Current identity:"
-          aws sts get-caller-identity
-          
+          aws configure set cli_history enabled
+          aws configure set debug true
+
+      - name: Show current identity
+        run: |
           echo "Current branch: ${{ github.ref_name }}"
+          aws sts get-caller-identity
+
+      - name: Test S3 permissions
+        run: |
+          # Create test content
+          echo "Test content from ${{ github.ref_name }} branch" > test.txt
           
-          echo "1. Testing ListBucket..."
-          aws s3 ls s3://github-actions-branch-test-640168414907/
+          echo "1. Testing ListBucket for own prefix..."
+          aws s3 ls "s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/"
           
-          echo "2. Testing upload to main with debug..."
-          echo "Test content from main" > test.txt
-          aws s3 cp test.txt s3://github-actions-branch-test-640168414907/main/test.txt --debug
+          echo "2. Testing upload to own branch prefix..."
+          aws s3 cp test.txt "s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/test.txt"
           
-          echo "3. Testing list main..."
-          aws s3 ls s3://github-actions-branch-test-640168414907/main/
+          echo "3. Verifying upload..."
+          aws s3 ls "s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/test.txt"
           
-          echo "4. Testing upload to develop (should fail)..."
-          aws s3 cp test.txt s3://github-actions-branch-test-640168414907/develop/test.txt || echo "Failed as expected"
+          echo "4. Testing download..."
+          aws s3 cp "s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/test.txt" downloaded.txt
+          cat downloaded.txt
           
-          echo "5. Testing list develop..."
-          aws s3 ls s3://github-actions-branch-test-640168414907/develop/
+          echo "5. Testing access to other branch (should fail)..."
+          OTHER_BRANCH=$([[ "${{ github.ref_name }}" == "main" ]] && echo "develop" || echo "main")
+          aws s3 ls "s3://github-actions-branch-test-640168414907/$OTHER_BRANCH/" || echo "Failed as expected"
+
+      - name: Cleanup test files
+        if: always()
+        run: |
+          echo "Cleaning up test files..."
+          aws s3 rm "s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/test.txt" || true
 
     
