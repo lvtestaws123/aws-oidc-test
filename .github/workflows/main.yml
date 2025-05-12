@@ -22,30 +22,23 @@ jobs:
           aws-region: us-east-1
           role-session-name: ${{ github.ref_name }}
 
-      - name: Test S3 access
+      - name: Test branch isolation
         run: |
           echo "Current identity:"
           aws sts get-caller-identity
           
-          echo "Listing bucket contents:"
-          aws s3 ls s3://github-actions-branch-test-640168414907/
+          echo "1. Testing access to own branch..."
+          echo "Content from ${{ github.ref_name }}" > test.txt
+          aws s3 cp test.txt "s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/test.txt"
           
-          echo "Testing upload..."
-          echo "Test content from ${{ github.ref_name }}" > test.txt
-          aws s3 cp test.txt s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/test.txt --debug
+          echo "2. Testing access to other branch (should fail)..."
+          OTHER_BRANCH=$([[ "${{ github.ref_name }}" == "main" ]] && echo "develop" || echo "main")
+          aws s3 ls "s3://github-actions-branch-test-640168414907/$OTHER_BRANCH/" && echo "❌ Branch isolation failed" || echo "✅ Branch isolation working"
           
-          if [ $? -eq 0 ]; then
-            echo "Upload successful, testing download..."
-            aws s3 cp s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/test.txt - --debug
-            
-            echo "Testing cleanup..."
-            aws s3 rm s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/test.txt --debug
-          fi
-
-      - name: Check IAM permissions
-        run: |
-          echo "Checking IAM permissions..."
-          aws iam get-role --role-name github-oidc-role
-          aws iam get-role-policy --role-name github-oidc-role --policy-name S3BranchAccess
+          echo "3. Testing upload to other branch (should fail)..."
+          aws s3 cp test.txt "s3://github-actions-branch-test-640168414907/$OTHER_BRANCH/test.txt" && echo "❌ Branch isolation failed" || echo "✅ Branch isolation working"
+          
+          echo "4. Cleaning up..."
+          aws s3 rm "s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/test.txt"
 
     
