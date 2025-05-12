@@ -1,4 +1,4 @@
-name: S3 Access Test
+name: S3 Branch Access Test
 on:
   push:
     branches: [ main, develop ]
@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 jobs:
-  s3-test:
+  s3-branch-test:
     runs-on: ubuntu-latest
     
     steps:
@@ -22,19 +22,26 @@ jobs:
           aws-region: us-east-1
           role-session-name: ${{ github.ref_name }}
 
-      - name: Test S3 access
+      - name: Test branch-based access
         run: |
           echo "Current identity:"
           aws sts get-caller-identity
+          echo "Branch: ${{ github.ref_name }}"
           
-          echo "Testing basic upload..."
-          echo "Test content" > test.txt
-          aws s3 cp test.txt s3://github-actions-branch-test-640168414907/test.txt
+          echo "1. Testing own branch access..."
+          echo "Test content from ${{ github.ref_name }}" > test.txt
+          aws s3 cp test.txt "s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/test.txt"
           
-          echo "Testing basic download..."
-          aws s3 cp s3://github-actions-branch-test-640168414907/test.txt -
+          echo "2. Verifying own branch content..."
+          aws s3 ls "s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/"
+          aws s3 cp "s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/test.txt" -
           
-          echo "Testing cleanup..."
-          aws s3 rm s3://github-actions-branch-test-640168414907/test.txt
+          echo "3. Testing access to other branch (should fail)..."
+          OTHER_BRANCH=$([[ "${{ github.ref_name }}" == "main" ]] && echo "develop" || echo "main")
+          aws s3 ls "s3://github-actions-branch-test-640168414907/$OTHER_BRANCH/" || echo "✅ Cannot list other branch"
+          aws s3 cp test.txt "s3://github-actions-branch-test-640168414907/$OTHER_BRANCH/test.txt" || echo "✅ Cannot write to other branch"
+          
+          echo "4. Cleanup..."
+          aws s3 rm "s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/test.txt"
 
     
