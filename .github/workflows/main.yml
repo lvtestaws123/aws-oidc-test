@@ -22,34 +22,30 @@ jobs:
           aws-region: us-east-1
           role-session-name: ${{ github.ref_name }}
 
-      - name: Test branch isolation
+      - name: Test S3 access
         run: |
           echo "Current identity:"
           aws sts get-caller-identity
           
-          echo "1. Testing own branch access..."
-          # Create and upload test file
+          echo "Listing bucket contents:"
+          aws s3 ls s3://github-actions-branch-test-640168414907/
+          
+          echo "Testing upload..."
           echo "Test content from ${{ github.ref_name }}" > test.txt
-          aws s3 cp test.txt "s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/test.txt"
+          aws s3 cp test.txt s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/test.txt --debug
           
-          # List own branch
-          echo "2. Listing own branch contents..."
-          aws s3 ls "s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/"
-          
-          # Test other branch access
-          echo "3. Testing other branch access (should fail)..."
-          OTHER_BRANCH=$([[ "${{ github.ref_name }}" == "main" ]] && echo "develop" || echo "main")
-          aws s3 ls "s3://github-actions-branch-test-640168414907/$OTHER_BRANCH/" && echo "❌ Branch isolation failed" || echo "✅ Branch isolation working"
-          
-          echo "4. Testing upload to other branch (should fail)..."
-          aws s3 cp test.txt "s3://github-actions-branch-test-640168414907/$OTHER_BRANCH/test.txt" && echo "❌ Branch isolation failed" || echo "✅ Branch isolation working"
-          
-          echo "5. Cleanup..."
-          aws s3 rm "s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/test.txt"
+          if [ $? -eq 0 ]; then
+            echo "Upload successful, testing download..."
+            aws s3 cp s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/test.txt - --debug
+            
+            echo "Testing cleanup..."
+            aws s3 rm s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/test.txt --debug
+          fi
 
-      - name: Verify cleanup
+      - name: Check IAM permissions
         run: |
-          echo "Verifying own branch is clean..."
-          aws s3 ls "s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/"
+          echo "Checking IAM permissions..."
+          aws iam get-role --role-name github-oidc-role
+          aws iam get-role-policy --role-name github-oidc-role --policy-name S3BranchAccess
 
     
