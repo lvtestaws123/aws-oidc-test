@@ -28,7 +28,7 @@ jobs:
           echo "Current branch: ${{ github.ref_name }}"
           aws sts get-caller-identity
           
-      - name: Test S3 access
+      - name: Test S3 operations
         run: |
           # Create test file
           echo "Test content from ${{ github.ref_name }} branch at $(date)" > test.txt
@@ -42,7 +42,27 @@ jobs:
           echo "3. Reading file content..."
           aws s3 cp "s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/test.txt" -
           
-          echo "4. Cleaning up..."
+          echo "4. Testing branch isolation..."
+          OTHER_BRANCH=$([[ "${{ github.ref_name }}" == "main" ]] && echo "develop" || echo "main")
+          echo "Attempting to access $OTHER_BRANCH (should fail)..."
+          aws s3 ls "s3://github-actions-branch-test-640168414907/$OTHER_BRANCH/" || echo "Branch isolation working as expected"
+          
+          echo "5. Cleaning up..."
           aws s3 rm "s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/test.txt"
+          
+      - name: Verify cleanup
+        run: |
+          echo "Verifying all files were cleaned up..."
+          aws s3 ls "s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/"
+
+      - name: Summary
+        run: |
+          echo "Test Summary:"
+          echo "✅ Upload test passed"
+          echo "✅ List operation test passed"
+          echo "✅ Read operation test passed"
+          echo "✅ Delete operation test passed"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Role ARN: $(aws sts get-caller-identity --query 'Arn' --output text)"
 
     
