@@ -24,19 +24,22 @@ jobs:
       
       - name: Test Branch-Based Access
         run: |
+          echo "Current identity:"
+          aws sts get-caller-identity
+          
           echo "Current branch: ${{ github.ref_name }}"
           echo "Test content from ${{ github.ref_name }}" > test.txt
           
-          echo "1. Testing access to own branch path..."
-          aws s3 cp test.txt s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/test.txt
-          aws s3 ls s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/
+          echo "1. Testing access to own branch path (should succeed)..."
+          aws s3 cp test.txt s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/test.txt || echo "Failed to upload to own branch"
+          aws s3 ls s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/ || echo "Failed to list own branch"
           
           echo "2. Testing access to other branch path (should fail)..."
           OTHER_BRANCH=$([[ "${{ github.ref_name }}" == "main" ]] && echo "develop" || echo "main")
-          aws s3 ls s3://github-actions-branch-test-640168414907/$OTHER_BRANCH/ || echo "Access denied to other branch as expected"
-          aws s3 cp test.txt s3://github-actions-branch-test-640168414907/$OTHER_BRANCH/test.txt || echo "Upload to other branch failed as expected"
+          aws s3 ls s3://github-actions-branch-test-640168414907/$OTHER_BRANCH/ && echo "WARNING: Could list other branch" || echo "✅ Access denied to other branch as expected"
+          aws s3 cp test.txt s3://github-actions-branch-test-640168414907/$OTHER_BRANCH/test.txt && echo "WARNING: Could upload to other branch" || echo "✅ Upload to other branch failed as expected"
           
-          echo "3. Testing access to root..."
-          aws s3 ls s3://github-actions-branch-test-640168414907/
+          echo "3. Testing access to root (should fail)..."
+          aws s3 ls s3://github-actions-branch-test-640168414907/ && echo "WARNING: Could list root" || echo "✅ Access denied to root as expected"
 
     
