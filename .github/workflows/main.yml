@@ -22,14 +22,35 @@ jobs:
           aws-region: us-east-1
           role-session-name: ${{ github.ref_name }}
       
-      - name: Debug role information
+      - name: Test branch-based access
         run: |
-          echo "Role session details:"
-          aws sts get-caller-identity
           echo "Current branch: ${{ github.ref_name }}"
           
-          # Try a simpler S3 test
-          echo "Testing S3 list access:"
-          aws s3 ls s3://github-actions-branch-test-640168414907/
+          echo "1. Testing access to own branch prefix:"
+          aws s3 ls s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/
+          
+          echo "2. Creating and uploading test file to own branch:"
+          echo "Test from ${{ github.ref_name }} branch" > test.txt
+          aws s3 cp test.txt s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/test.txt
+          
+          echo "3. Verifying file upload:"
+          aws s3 ls s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/
+          
+          echo "4. Testing access to other branch (should fail):"
+          OTHER_BRANCH=$([[ "${{ github.ref_name }}" == "main" ]] && echo "develop" || echo "main")
+          if aws s3 ls s3://github-actions-branch-test-640168414907/$OTHER_BRANCH/; then
+            echo "❌ Should not be able to list other branch"
+            exit 1
+          else
+            echo "✅ Cannot list other branch as expected"
+          fi
+          
+          echo "5. Testing upload to other branch (should fail):"
+          if aws s3 cp test.txt s3://github-actions-branch-test-640168414907/$OTHER_BRANCH/test.txt; then
+            echo "❌ Should not be able to upload to other branch"
+            exit 1
+          else
+            echo "✅ Cannot upload to other branch as expected"
+          fi
 
     
