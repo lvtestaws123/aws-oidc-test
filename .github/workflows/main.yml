@@ -22,22 +22,35 @@ jobs:
           aws-region: us-east-1
           role-session-name: ${{ github.ref_name }}
       
-      - name: Debug Role and Policy
+      - name: Test S3 Access
         run: |
           echo "Current identity:"
           aws sts get-caller-identity
           
-          echo "Current IAM policy:"
-          aws iam get-role-policy --role-name github-oidc-role --policy-name S3BranchAccess
-
-      - name: Test Basic S3 Access
-        run: |
-          echo "Test content" > test.txt
+          echo "Creating test files..."
+          echo "Root test content" > root_test.txt
+          echo "Branch test content" > branch_test.txt
           
-          echo "1. Testing basic upload..."
-          aws s3 cp test.txt s3://github-actions-branch-test-640168414907/test.txt --debug
+          echo "1. Testing root-level upload..."
+          aws s3 cp root_test.txt s3://github-actions-branch-test-640168414907/root_test.txt
           
-          echo "2. Testing branch-specific upload..."
-          aws s3 cp test.txt "s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/test.txt" --debug
+          echo "2. Testing branch-level upload..."
+          aws s3 cp branch_test.txt "s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/branch_test.txt"
+          
+          echo "3. Testing list operations..."
+          echo "Root level:"
+          aws s3 ls s3://github-actions-branch-test-640168414907/
+          echo "Branch level:"
+          aws s3 ls "s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/"
+          
+          echo "4. Testing downloads..."
+          echo "Root level:"
+          aws s3 cp s3://github-actions-branch-test-640168414907/root_test.txt downloaded_root.txt
+          echo "Branch level:"
+          aws s3 cp "s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/branch_test.txt" downloaded_branch.txt
+          
+          echo "5. Testing cleanup..."
+          aws s3 rm s3://github-actions-branch-test-640168414907/root_test.txt
+          aws s3 rm "s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/branch_test.txt"
 
     
