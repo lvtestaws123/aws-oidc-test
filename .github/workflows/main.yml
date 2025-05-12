@@ -26,25 +26,24 @@ jobs:
         run: |
           echo "Running on branch: ${{ github.ref_name }}"
           
-          # Debug information
           echo "Assumed role ARN:"
           aws sts get-caller-identity --query 'Arn' --output text
           
-          echo "Listing S3 buckets:"
-          aws s3 ls
-          
-          # Try to list objects in current branch path
           echo "Listing objects in current branch path:"
           aws s3 ls s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/
           
-          # Try to create a test file
           echo "Creating test file in current branch path:"
           echo "Test content from ${{ github.ref_name }}" > test.txt
           aws s3 cp test.txt s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/test.txt
           
-          # Try to list objects in other branch path (should fail)
+          echo "Listing objects in current branch path after upload:"
+          aws s3 ls s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/
+          
           echo "Attempting to list other branch (should fail):"
           OTHER_BRANCH=$([[ "${{ github.ref_name }}" == "main" ]] && echo "develop" || echo "main")
           aws s3 ls s3://github-actions-branch-test-640168414907/$OTHER_BRANCH/ || echo "Access denied as expected"
+          
+          echo "Attempting to upload to other branch (should fail):"
+          aws s3 cp test.txt s3://github-actions-branch-test-640168414907/$OTHER_BRANCH/test.txt || echo "Upload to other branch failed as expected"
 
     
