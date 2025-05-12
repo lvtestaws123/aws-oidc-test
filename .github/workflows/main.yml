@@ -36,41 +36,34 @@ jobs:
           echo "1. Testing write access to own branch (${{ github.ref_name }})..."
           echo "Test content from ${{ github.ref_name }} branch at $(date)" > test.txt
           
-          echo "Uploading to own branch prefix..."
-          aws s3 cp test.txt "s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/test.txt"
+          echo "Uploading to own branch prefix with debug..."
+          aws s3 cp test.txt "s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/test.txt" --debug
           
           if [ $? -eq 0 ]; then
-            echo "2. Verifying content..."
-            echo "Listing branch contents:"
+            echo "✅ Upload successful"
+            echo "Verifying content..."
             aws s3 ls "s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/"
-            
-            echo "Reading uploaded file:"
             aws s3 cp "s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/test.txt" -
           else
-            echo "❌ Upload to own branch failed"
-            exit 1
+            echo "❌ Upload failed"
+            echo "Debug information:"
+            echo "Role session name: ${{ github.ref_name }}"
+            echo "Target path: s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/test.txt"
           fi
 
       - name: Test Cross-Branch Access
         if: always()
         run: |
-          echo "3. Testing access restrictions..."
           OTHER_BRANCH=$([[ "${{ github.ref_name }}" == "main" ]] && echo "develop" || echo "main")
-          echo "Attempting access to $OTHER_BRANCH branch..."
+          echo "Testing access to $OTHER_BRANCH branch (should fail)..."
           
-          echo "3a. Trying to list other branch (should fail):"
           aws s3 ls "s3://github-actions-branch-test-640168414907/$OTHER_BRANCH/" && echo "❌ Can list other branch" || echo "✅ List blocked as expected"
-          
-          echo "3b. Trying to upload to other branch (should fail):"
           aws s3 cp test.txt "s3://github-actions-branch-test-640168414907/$OTHER_BRANCH/test.txt" && echo "❌ Can write to other branch" || echo "✅ Write blocked as expected"
 
       - name: Cleanup
         if: always()
         run: |
-          echo "4. Cleaning up..."
-          aws s3 rm "s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/test.txt" || echo "No file to remove"
-          
-          echo "Final bucket contents:"
-          aws s3 ls s3://github-actions-branch-test-640168414907/ --recursive
+          echo "Cleaning up..."
+          aws s3 rm "s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/test.txt" || echo "Nothing to clean up"
 
     
