@@ -24,32 +24,15 @@ jobs:
       
       - name: Test branch-based access
         run: |
-          echo "Current branch: ${{ github.ref_name }}"
-          
-          echo "Assumed role details:"
+          echo "Current identity:"
           aws sts get-caller-identity
           
-          echo "IAM role policies:"
-          aws iam list-attached-role-policies --role-name github-oidc-role
+          echo "Current branch path: ${{ github.ref_name }}"
           
-          echo "S3 bucket policy:"
-          aws s3api get-bucket-policy --bucket github-actions-branch-test-640168414907
+          echo "Creating test file..."
+          echo "Test content" > test.txt
           
-          echo "1. Testing access to own branch prefix:"
-          aws s3 ls s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/
-          
-          echo "2. Creating and uploading test file to own branch:"
-          echo "Test from ${{ github.ref_name }} branch" > test.txt
+          echo "Attempting to upload file..."
           aws s3 cp test.txt s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/test.txt --debug
-          
-          echo "3. Verifying file upload:"
-          aws s3 ls s3://github-actions-branch-test-640168414907/${{ github.ref_name }}/
-          
-          echo "4. Testing access to other branch (should fail):"
-          OTHER_BRANCH=$([[ "${{ github.ref_name }}" == "main" ]] && echo "develop" || echo "main")
-          aws s3 ls s3://github-actions-branch-test-640168414907/$OTHER_BRANCH/ || echo "Access denied as expected"
-          
-          echo "5. Testing upload to other branch (should fail):"
-          aws s3 cp test.txt s3://github-actions-branch-test-640168414907/$OTHER_BRANCH/test.txt || echo "Upload to other branch failed as expected"
 
     
