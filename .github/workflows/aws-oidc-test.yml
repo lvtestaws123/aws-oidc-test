@@ -22,6 +22,7 @@ jobs:
           role-to-assume: arn:aws:iam::640168414907:role/github-oidc-role
           aws-region: us-east-1
           role-session-name: GitHubActionsSession
+          role-session-tagging: true
 
       - name: Test S3 access
         env:
