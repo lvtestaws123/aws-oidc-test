@@ -22,7 +22,7 @@ jobs:
           role-to-assume: arn:aws:iam::640168414907:role/github-oidc-role
           aws-region: us-east-1
 
-       - name: Test S3 access
+      - name: Test S3 access
         run: |
           echo "Testing S3 access..."
           S3_PREFIX="lvtestaws123/aws-oidc-test"
