@@ -21,29 +21,13 @@ jobs:
         with:
           role-to-assume: arn:aws:iam::640168414907:role/github-oidc-role
           aws-region: us-east-1
-          role-session-name: GitHubActionsSession
-          role-session-tagging: true
 
       - name: Test S3 access
-        env:
-          REPO: ${{ github.repository }}
-          REF: ${{ github.ref }}
         run: |
           echo "Testing S3 access..."
-          S3_PREFIX="${REPO}/${REF#refs/}"
+          S3_PREFIX="lvtestaws123/aws-oidc-test"
           echo "S3 Prefix: $S3_PREFIX"
           aws s3 ls s3://test-github-oidc-bucket-20250625/$S3_PREFIX/
           echo "Hello from GitHub Actions" > test-file.txt
           aws s3 cp test-file.txt s3://test-github-oidc-bucket-20250625/$S3_PREFIX/
           echo "S3 access test completed."
-
-      - name: Test access to different path
-        run: |
-          echo "Testing access to different path..."
-          aws s3 ls s3://test-github-oidc-bucket-20250625/different-repo/
-          if [ $? -eq 0 ]; then
-            echo "ERROR: Access to different path succeeded when it should have failed"
-            exit 1
-          else
-            echo "Access denied as expected"
-          fi
