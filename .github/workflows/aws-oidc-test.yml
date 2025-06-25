@@ -22,15 +22,21 @@ jobs:
           role-to-assume: arn:aws:iam::640168414907:role/github-oidc-role
           aws-region: us-east-1
 
+      - name: Debug AWS identity
+        run: |
+          aws sts get-caller-identity
+          aws s3 ls
+
       - name: Test S3 access
         run: |
           echo "Testing S3 access..."
           S3_PREFIX="lvtestaws123/aws-oidc-test"
           echo "Testing root prefix: $S3_PREFIX"
-          aws s3 ls s3://test-github-oidc-bucket-20250625/$S3_PREFIX
+          aws s3 ls s3://test-github-oidc-bucket-20250625 --debug
           
           echo "Creating test file..."
           echo "Hello from GitHub Actions" > test-file.txt
-          aws s3 cp test-file.txt s3://test-github-oidc-bucket-20250625/$S3_PREFIX/
+          aws s3 cp test-file.txt s3://test-github-oidc-bucket-20250625/$S3_PREFIX/ --debug
 
+    
     
