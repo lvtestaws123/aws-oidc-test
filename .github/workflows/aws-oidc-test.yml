@@ -1,0 +1,31 @@
+name: AWS OIDC Test
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  aws-oidc-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: arn:aws:iam::640168414907:role/github-oidc-role
+          aws-region: us-east-1
+
+      - name: Test S3 access
+        run: |
+          echo "Testing S3 access..."
+          aws s3 ls s3://test-github-oidc-bucket-20250625
+          echo "Hello from GitHub Actions" > test-file.txt
+          aws s3 cp test-file.txt s3://test-github-oidc-bucket-20250625/
+          echo "S3 access test completed."
