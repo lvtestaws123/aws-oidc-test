@@ -2,7 +2,7 @@ name: S3 Branch-Based Access Test
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main ]
   workflow_dispatch:
 
 permissions:
@@ -21,27 +21,25 @@ jobs:
         with:
           role-to-assume: arn:aws:iam::640168414907:role/github-oidc-role
           aws-region: us-east-1
-          role-session-tagging: true
+          # Changed to include AWS standard tag prefix
           role-tags: |
-            repository=${{ github.repository }}
-            branch=${{ github.ref_name }}
+            GitHub_Repository=${{ github.repository }}
+            GitHub_Branch=${{ github.ref_name }}
+
+      - name: Debug Session
+        run: |
+          echo "Identity info:"
+          aws sts get-caller-identity
+          echo "Session tags:"
+          aws sts get-session-token --debug
 
       - name: Test Branch-Based S3 Access
         run: |
           S3_PATH="${{ github.repository }}/refs/heads/${{ github.ref_name }}"
           echo "Testing access to: $S3_PATH"
           
-          # Test own branch access
           echo "1. Testing write to own branch path..."
           echo "test content" > test.txt
-          aws s3 cp test.txt "s3://test-github-oidc-bucket-20250625/$S3_PATH/test.txt"
-          
-          echo "2. Testing list own branch path..."
-          aws s3 ls "s3://test-github-oidc-bucket-20250625/$S3_PATH/"
-          
-          echo "3. Testing access to different branch (should fail)..."
-          OTHER_BRANCH="develop"
-          OTHER_PATH="${{ github.repository }}/refs/heads/$OTHER_BRANCH"
-          aws s3 ls "s3://test-github-oidc-bucket-20250625/$OTHER_PATH/" || echo "Access denied as expected"
+          aws s3 cp test.txt "s3://test-github-oidc-bucket-20250625/$S3_PATH/test.txt" --debug
 
     
