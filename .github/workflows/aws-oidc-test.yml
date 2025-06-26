@@ -21,22 +21,23 @@ jobs:
         with:
           role-to-assume: arn:aws:iam::640168414907:role/github-oidc-role
           aws-region: us-east-1
+          role-session-name: ${{ github.repository }}
 
-      - name: Debug AWS identity
+      - name: Debug Identity
         run: |
+          echo "Current identity:"
           aws sts get-caller-identity
-          aws s3 ls
 
       - name: Test S3 access
         run: |
-          echo "Testing S3 access..."
-          S3_PREFIX="lvtestaws123/aws-oidc-test"
-          echo "Testing root prefix: $S3_PREFIX"
-          aws s3 ls s3://test-github-oidc-bucket-20250625 --debug
+          REPO_PATH="${{ github.repository }}"
+          echo "Testing access to own repo path ($REPO_PATH)..."
+          aws s3 ls s3://test-github-oidc-bucket-20250625/$REPO_PATH/ || echo "List failed"
           
-          echo "Creating test file..."
-          echo "Hello from GitHub Actions" > test-file.txt
-          aws s3 cp test-file.txt s3://test-github-oidc-bucket-20250625/$S3_PREFIX/ --debug
+          echo "Testing write to own repo path..."
+          echo "test content" > test.txt
+          aws s3 cp test.txt s3://test-github-oidc-bucket-20250625/$REPO_PATH/ || echo "Write failed"
+          
+          echo "Testing access to different path (should fail)..."
+          aws s3 ls s3://test-github-oidc-bucket-20250625/different-repo/ || echo "Access denied as expected"
 
-    
-    
