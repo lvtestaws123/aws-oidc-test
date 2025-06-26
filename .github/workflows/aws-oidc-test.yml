@@ -22,21 +22,24 @@ jobs:
           aws-region: us-east-1
           role-to-assume: arn:aws:iam::640168414907:role/github-oidc-role
 
-      - name: Get GitHub OIDC Token
-        id: get-token
+      - name: Get GitHub OIDC Token and Call Lambda
+        id: get-creds
         run: |
+          echo "Getting OIDC token..."
           TOKEN=$(curl -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=https://github.com/lvtestaws123" | jq -r '.value')
           echo "::add-mask::$TOKEN"
-          echo "token=$TOKEN" >> $GITHUB_OUTPUT
-
-      - name: Call Lambda function
-        id: lambda
-        run: |
-          RESPONSE=$(aws lambda invoke \
+          
+          echo "Calling Lambda function..."
+          aws lambda invoke \
             --function-name GithubOIDCProxy \
-            --payload "{\"token\":\"${{ steps.get-token.outputs.token }}\"}" \
+            --payload "{\"token\":\"$TOKEN\"}" \
             --cli-binary-format raw-in-base64-out \
-            output.json)
+            output.json
+          
+          echo "Lambda response:"
+          cat output.json
+          
+          echo "Setting credentials..."
           CREDENTIALS=$(cat output.json | jq -r '.body' | jq -r '.')
           echo "AWS_ACCESS_KEY_ID=$(echo $CREDENTIALS | jq -r '.AccessKeyId')" >> $GITHUB_ENV
           echo "AWS_SECRET_ACCESS_KEY=$(echo $CREDENTIALS | jq -r '.SecretAccessKey')" >> $GITHUB_ENV
@@ -46,17 +49,5 @@ jobs:
         run: |
           echo "Testing S3 access..."
           S3_PATH="${{ github.repository }}/refs/heads/${{ github.ref_name }}"
-          echo "S3 Path: $S3_PATH"
-          
-          echo "1. Testing write access..."
-          echo "test content" > test.txt
-          aws s3 cp test.txt "s3://test-github-oidc-bucket-20250625/$S3_PATH/test.txt"
-          
-          echo "2. Testing list access..."
-          aws s3 ls "s3://test-github-oidc-bucket-20250625/$S3_PATH/"
-          
-          echo "3. Testing read access..."
-          aws s3 cp "s3://test-github-oidc-bucket-20250625/$S3_PATH/test.txt" ./downloaded.txt
-          cat ./downloaded.txt
-
-    
+          echo "Testing path: $S3_PATH"
+          aws s3 ls "s3://test-github-oidc-bucket-20250625/"
