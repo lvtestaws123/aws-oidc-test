@@ -21,9 +21,6 @@ jobs:
         with:
           role-to-assume: arn:aws:iam::640168414907:role/github-oidc-role
           aws-region: us-east-1
-          role-duration-seconds: 900
-          tags: |
-            branch=${{ github.ref_name }}
 
       - name: Test Branch-Based S3 Access
         env:
@@ -32,9 +29,13 @@ jobs:
           S3_PATH="lvtestaws123/aws-oidc-test/refs/heads/$BRANCH"
           echo "Testing access to: $S3_PATH"
           
-          # Test own branch access
           echo "1. Testing write to own branch..."
           echo "test content" > test.txt
           aws s3 cp test.txt "s3://test-github-oidc-bucket-20250625/$S3_PATH/"
+          
+          echo "2. Testing access to different branch..."
+          OTHER_BRANCH=$([[ "$BRANCH" == "main" ]] && echo "develop" || echo "main")
+          OTHER_PATH="lvtestaws123/aws-oidc-test/refs/heads/$OTHER_BRANCH"
+          aws s3 ls "s3://test-github-oidc-bucket-20250625/$OTHER_PATH/" || echo "Access denied as expected"
 
     
