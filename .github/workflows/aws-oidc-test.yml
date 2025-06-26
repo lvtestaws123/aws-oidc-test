@@ -22,11 +22,7 @@ jobs:
         with:
           role-to-assume: arn:aws:iam::640168414907:role/github-oidc-role
           aws-region: us-east-1
-          role-session-name: GithubActionsSession
-          role-duration-seconds: 900
-          role-tags: |
-            repository=${{ github.repository }}
-            branch=${{ github.ref_name }}
+          role-session-name: ${{ github.repository }}/${{ github.ref_name }}
 
       - name: Test S3 Dynamic Access
         env:
