@@ -1,36 +1,62 @@
-name: S3 Access via Cognito Debug
+name: S3 Access via Lambda OIDC Proxy
 
 on:
+  push:
+    branches: [ main ]
+  pull_request:
   workflow_dispatch:
 
 jobs:
-  debug-cognito:
+  s3-access:
     runs-on: ubuntu-latest
     permissions:
       id-token: write
       contents: read
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-region: us-east-1
+          role-to-assume: arn:aws:iam::640168414907:role/github-oidc-role
+
       - name: Get GitHub OIDC Token
         id: get-token
         run: |
-          TOKEN=$(curl -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL" | jq -r '.value')
+          TOKEN=$(curl -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=https://github.com/lvtestaws123" | jq -r '.value')
           echo "::add-mask::$TOKEN"
           echo "token=$TOKEN" >> $GITHUB_OUTPUT
+
+      - name: Call Lambda function
+        id: lambda
+        run: |
+          RESPONSE=$(aws lambda invoke \
+            --function-name GithubOIDCProxy \
+            --payload "{\"token\":\"${{ steps.get-token.outputs.token }}\"}" \
+            --cli-binary-format raw-in-base64-out \
+            output.json)
+          CREDENTIALS=$(cat output.json | jq -r '.body' | jq -r '.')
+          echo "AWS_ACCESS_KEY_ID=$(echo $CREDENTIALS | jq -r '.AccessKeyId')" >> $GITHUB_ENV
+          echo "AWS_SECRET_ACCESS_KEY=$(echo $CREDENTIALS | jq -r '.SecretAccessKey')" >> $GITHUB_ENV
+          echo "AWS_SESSION_TOKEN=$(echo $CREDENTIALS | jq -r '.SessionToken')" >> $GITHUB_ENV
+
+      - name: Test S3 access
+        run: |
+          echo "Testing S3 access..."
+          S3_PATH="${{ github.repository }}/refs/heads/${{ github.ref_name }}"
+          echo "S3 Path: $S3_PATH"
           
-          # Debug: Print token claims
-          echo "Token claims:"
-          echo $TOKEN | cut -d. -f2 | base64 -d | jq
+          echo "1. Testing write access..."
+          echo "test content" > test.txt
+          aws s3 cp test.txt "s3://test-github-oidc-bucket-20250625/$S3_PATH/test.txt"
+          
+          echo "2. Testing list access..."
+          aws s3 ls "s3://test-github-oidc-bucket-20250625/$S3_PATH/"
+          
+          echo "3. Testing read access..."
+          aws s3 cp "s3://test-github-oidc-bucket-20250625/$S3_PATH/test.txt" ./downloaded.txt
+          cat ./downloaded.txt
 
-      - name: Try Cognito GetId
-        run: |
-          echo "Trying Cognito GetId..."
-          aws cognito-identity get-id \
-            --identity-pool-id "us-east-1:5993a2a3-62da-4b8a-a25c-24a76c4b1ec4" \
-            --logins "{\"token.actions.githubusercontent.com\":\"${{ steps.get-token.outputs.token }}\"}" \
-            --debug
-
-      - name: Check Cognito Identity Pool
-        run: |
-          echo "Checking Cognito Identity Pool configuration..."
-          aws cognito-identity describe-identity-pool \
-            --identity-pool-id "us-east-1:5993a2a3-62da-4b8a-a25c-24a76c4b1ec4"
+    
