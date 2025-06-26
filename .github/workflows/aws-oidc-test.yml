@@ -1,54 +1,36 @@
-name: S3 Access via Cognito
+name: S3 Access via Cognito Debug
 
 on:
-  push:
-    branches: [ main ]
-  pull_request:
   workflow_dispatch:
 
 jobs:
-  s3-access:
+  debug-cognito:
     runs-on: ubuntu-latest
     permissions:
       id-token: write
       contents: read
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
       - name: Get GitHub OIDC Token
         id: get-token
         run: |
-          TOKEN=$(curl -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=token.actions.githubusercontent.com" | jq -r '.value')
+          TOKEN=$(curl -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL" | jq -r '.value')
           echo "::add-mask::$TOKEN"
           echo "token=$TOKEN" >> $GITHUB_OUTPUT
-
-      - name: Configure AWS credentials with token
-        run: |
-          aws configure set aws_access_key_id ""
-          aws configure set aws_secret_access_key ""
-          aws configure set region us-east-1
           
-          echo "Getting Cognito Identity ID..."
-          IDENTITY_ID=$(aws cognito-identity get-id \
+          # Debug: Print token claims
+          echo "Token claims:"
+          echo $TOKEN | cut -d. -f2 | base64 -d | jq
+
+      - name: Try Cognito GetId
+        run: |
+          echo "Trying Cognito GetId..."
+          aws cognito-identity get-id \
             --identity-pool-id "us-east-1:5993a2a3-62da-4b8a-a25c-24a76c4b1ec4" \
             --logins "{\"token.actions.githubusercontent.com\":\"${{ steps.get-token.outputs.token }}\"}" \
-            --query "IdentityId" --output text)
-          
-          echo "Getting Cognito Credentials..."
-          CREDENTIALS=$(aws cognito-identity get-credentials-for-identity \
-            --identity-id "$IDENTITY_ID" \
-            --logins "{\"token.actions.githubusercontent.com\":\"${{ steps.get-token.outputs.token }}\"}" \
-            --query "Credentials" --output json)
-          
-          echo "Setting AWS credentials..."
-          aws configure set aws_access_key_id $(echo $CREDENTIALS | jq -r .AccessKeyId)
-          aws configure set aws_secret_access_key $(echo $CREDENTIALS | jq -r .SecretKey)
-          aws configure set aws_session_token $(echo $CREDENTIALS | jq -r .SessionToken)
+            --debug
 
-      - name: Test S3 access
+      - name: Check Cognito Identity Pool
         run: |
-          echo "Testing S3 access..."
-          aws s3 ls "s3://test-github-oidc-bucket-20250625/"
-
-    
+          echo "Checking Cognito Identity Pool configuration..."
+          aws cognito-identity describe-identity-pool \
+            --identity-pool-id "us-east-1:5993a2a3-62da-4b8a-a25c-24a76c4b1ec4"
