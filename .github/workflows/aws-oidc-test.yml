@@ -1,8 +1,9 @@
-name: S3 Branch-Based Access Test
+name: S3 Dynamic Repository Access Test
 
 on:
   push:
     branches: [ main, develop ]
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -10,7 +11,7 @@ permissions:
   contents: read
 
 jobs:
-  s3-branch-test:
+  s3-dynamic-test:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -21,39 +22,35 @@ jobs:
         with:
           role-to-assume: arn:aws:iam::640168414907:role/github-oidc-role
           aws-region: us-east-1
+          role-session-name: GithubActionsSession
+          role-duration-seconds: 900
+          role-tags: |
+            repository=${{ github.repository }}
+            branch=${{ github.ref_name }}
 
-      - name: Test Branch-Based S3 Access
+      - name: Test S3 Dynamic Access
         env:
-          BRANCH: ${{ github.ref_name }}
           REPO: ${{ github.repository }}
+          BRANCH: ${{ github.ref_name }}
         run: |
-          echo "Current repository: $REPO"
-          echo "Current branch: $BRANCH"
+          echo "Testing for repository: $REPO and branch: $BRANCH"
           
           S3_PATH="$REPO/refs/heads/$BRANCH"
-          echo "Testing access to: $S3_PATH"
+          echo "S3 Path: $S3_PATH"
           
-          echo "1. Testing write to own path..."
-          echo "test content from $REPO:$BRANCH" > test.txt
+          echo "1. Testing write access..."
+          echo "test content" > test.txt
           aws s3 cp test.txt "s3://test-github-oidc-bucket-20250625/$S3_PATH/test.txt"
           
-          echo "2. Verifying write succeeded..."
+          echo "2. Testing list access..."
           aws s3 ls "s3://test-github-oidc-bucket-20250625/$S3_PATH/"
           
-          echo "3. Testing read back..."
-          aws s3 cp "s3://test-github-oidc-bucket-20250625/$S3_PATH/test.txt" downloaded.txt
-          cat downloaded.txt
+          echo "3. Testing read access..."
+          aws s3 cp "s3://test-github-oidc-bucket-20250625/$S3_PATH/test.txt" ./downloaded.txt
+          cat ./downloaded.txt
           
-          echo "4. Testing access to different branch..."
-          OTHER_BRANCH=$([[ "$BRANCH" == "main" ]] && echo "develop" || echo "main")
-          OTHER_PATH="$REPO/refs/heads/$OTHER_BRANCH"
-          echo "Attempting to access: $OTHER_PATH"
-          aws s3 ls "s3://test-github-oidc-bucket-20250625/$OTHER_PATH/" || echo "✅ Access denied as expected"
-          
-          echo "5. Testing access to different repository..."
-          OTHER_REPO="some-other-repo/different-project"
-          OTHER_PATH="$OTHER_REPO/refs/heads/$BRANCH"
-          echo "Attempting to access: $OTHER_PATH"
-          aws s3 ls "s3://test-github-oidc-bucket-20250625/$OTHER_PATH/" || echo "✅ Access denied as expected"
+          echo "4. Testing access to different repository (should fail)..."
+          OTHER_REPO="some-other-repo/project"
+          aws s3 ls "s3://test-github-oidc-bucket-20250625/$OTHER_REPO/" || echo "Access denied as expected"
 
     
