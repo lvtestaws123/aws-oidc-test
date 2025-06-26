@@ -1,18 +1,17 @@
-name: S3 Dynamic Repository Access Test
+name: S3 Access via Cognito
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main ]
   pull_request:
   workflow_dispatch:
 
-permissions:
-  id-token: write
-  contents: read
-
 jobs:
-  s3-dynamic-test:
+  s3-access:
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -20,18 +19,28 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
-          role-to-assume: arn:aws:iam::640168414907:role/github-oidc-role
+          audience: sts.amazonaws.com
           aws-region: us-east-1
-          role-session-name: ${{ github.repository_owner }}-${{ github.event.repository.name }}-${{ github.ref_name }}
 
-      - name: Test S3 Dynamic Access
-        env:
-          REPO: ${{ github.repository }}
-          BRANCH: ${{ github.ref_name }}
+      - name: Get OIDC token
+        id: get_oidc_token
         run: |
-          echo "Testing for repository: $REPO and branch: $BRANCH"
-          
-          S3_PATH="$REPO/refs/heads/$BRANCH"
+          TOKEN=$(curl -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r '.value')
+          echo "::add-mask::$TOKEN"
+          echo "token=$TOKEN" >> $GITHUB_OUTPUT
+
+      - name: Get Cognito credentials
+        run: |
+          IDENTITY_ID=$(aws cognito-identity get-id --identity-pool-id "us-east-1:5993a2a3-62da-4b8a-a25c-24a76c4b1ec4" --logins "{\"token.actions.githubusercontent.com\":\"${{ steps.get_oidc_token.outputs.token }}\"}" --query "IdentityId" --output text)
+          CREDENTIALS=$(aws cognito-identity get-credentials-for-identity --identity-id "$IDENTITY_ID" --logins "{\"token.actions.githubusercontent.com\":\"${{ steps.get_oidc_token.outputs.token }}\"}" --query "Credentials" --output json)
+          echo "AWS_ACCESS_KEY_ID=$(echo $CREDENTIALS | jq -r .AccessKeyId)" >> $GITHUB_ENV
+          echo "AWS_SECRET_ACCESS_KEY=$(echo $CREDENTIALS | jq -r .SecretKey)" >> $GITHUB_ENV
+          echo "AWS_SESSION_TOKEN=$(echo $CREDENTIALS | jq -r .SessionToken)" >> $GITHUB_ENV
+
+      - name: Test S3 access
+        run: |
+          echo "Testing S3 access..."
+          S3_PATH="${{ github.repository }}/refs/heads/${{ github.ref_name }}"
           echo "S3 Path: $S3_PATH"
           
           echo "1. Testing write access..."
