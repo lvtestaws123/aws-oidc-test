@@ -16,8 +16,7 @@ jobs:
           role-to-assume: arn:aws:iam::640168414907:role/github-oidc-role
           aws-region: us-east-1
 
-      - name: Get OIDC Token and Call Lambda
-        id: get-creds
+      - name: Test Lambda Proxy
         run: |
           echo "Getting OIDC token..."
           TOKEN=$(curl -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r '.value')
@@ -27,26 +26,23 @@ jobs:
             --function-name GithubOIDCProxy \
             --payload "{\"token\":\"$TOKEN\"}" \
             --cli-binary-format raw-in-base64-out \
-            response.json)
+            output.json)
+            
+          echo "Lambda response:"
+          cat output.json
           
-          echo "Lambda response status: $RESPONSE"
-          cat response.json
-
-          # Extract credentials from response
-          if [ -f response.json ]; then
-            CREDS=$(cat response.json | jq -r '.body' | jq -r '.')
-            echo "AWS_ACCESS_KEY_ID=$(echo $CREDS | jq -r '.AccessKeyId')" >> $GITHUB_ENV
-            echo "AWS_SECRET_ACCESS_KEY=$(echo $CREDS | jq -r '.SecretAccessKey')" >> $GITHUB_ENV
-            echo "AWS_SESSION_TOKEN=$(echo $CREDS | jq -r '.SessionToken')" >> $GITHUB_ENV
+          if [ -f output.json ]; then
+            CREDS=$(cat output.json | jq -r '.body' | jq -r '.')
+            export AWS_ACCESS_KEY_ID=$(echo $CREDS | jq -r '.AccessKeyId')
+            export AWS_SECRET_ACCESS_KEY=$(echo $CREDS | jq -r '.SecretAccessKey')
+            export AWS_SESSION_TOKEN=$(echo $CREDS | jq -r '.SessionToken')
+            
+            echo "Testing S3 access with Lambda-provided credentials..."
+            echo "test content" > test.txt
+            aws s3 cp test.txt "s3://test-github-oidc-bucket-20250625/${{ github.repository }}/refs/heads/${{ github.ref_name }}/test.txt"
           else
-            echo "No response.json file found"
+            echo "No output.json file found"
             exit 1
           fi
-
-      - name: Test S3 Access
-        run: |
-          echo "Testing S3 access with Lambda-provided credentials..."
-          echo "test content" > test.txt
-          aws s3 cp test.txt "s3://test-github-oidc-bucket-20250625/${{ github.repository }}/refs/heads/${{ github.ref_name }}/test.txt"
 
     
