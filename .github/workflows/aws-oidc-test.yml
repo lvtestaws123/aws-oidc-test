@@ -1,10 +1,10 @@
-name: Test S3 Access with OIDC Debug
+name: Test S3 Access with OIDC
 
 on:
   workflow_dispatch:
 
 jobs:
-  debug:
+  s3-access-test:
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -17,16 +17,16 @@ jobs:
           aws-region: us-east-1
           role-session-name: lvtestaws123-aws-oidc-test
 
-      - name: Debug Identity
+      - name: Test S3 Access
         run: |
-          echo "AWS Identity:"
-          aws sts get-caller-identity
+          ROLE_ID=$(aws sts get-caller-identity --query 'UserId' --output text | cut -d: -f1)
+          S3_PREFIX="$ROLE_ID/lvtestaws123-aws-oidc-test"
           
-          echo "Testing variable substitution:"
-          echo "aws:userid = $(aws sts get-caller-identity --query 'UserId' --output text)"
-          echo "arn = $(aws sts get-caller-identity --query 'Arn' --output text)"
+          echo "Testing write access..."
+          echo "test content" > test.txt
+          aws s3 cp test.txt "s3://test-github-oidc-bucket-20250625/$S3_PREFIX/test.txt"
           
-          echo "Attempting to list bucket root:"
-          aws s3 ls s3://test-github-oidc-bucket-20250625/
+          echo "Testing list access..."
+          aws s3 ls "s3://test-github-oidc-bucket-20250625/$S3_PREFIX/"
 
     
