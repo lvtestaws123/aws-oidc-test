@@ -1,4 +1,4 @@
-name: Test S3 Access Basic
+name: Debug S3 Access
 
 on:
   workflow_dispatch:
@@ -17,13 +17,21 @@ jobs:
           aws-region: us-east-1
           role-session-name: test-session
 
-      - name: Debug
+      - name: Debug Permissions
         run: |
-          echo "Identity:"
+          echo "1. Identity:"
           aws sts get-caller-identity
           
-          echo "Writing test file..."
-          echo "test" > test.txt
-          aws s3 cp test.txt s3://test-github-oidc-bucket-20250625/test-$(date +%s).txt
+          echo "2. List IAM policies:"
+          aws iam list-attached-role-policies --role-name github-oidc-role
+          
+          echo "3. Test basic S3 commands:"
+          aws s3 ls
+          aws s3 ls s3://test-github-oidc-bucket-20250625/
+          
+          echo "4. Try write with full path info:"
+          date > test.txt
+          aws s3 cp test.txt s3://test-github-oidc-bucket-20250625/test-debug.txt --debug
 
+    
     
