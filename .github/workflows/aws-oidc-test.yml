@@ -1,40 +1,45 @@
-name: S3 Branch-Based Access Test
+name: Test Lambda OIDC Proxy
 
 on:
-  push:
-    branches: [ main, develop ]
   workflow_dispatch:
 
-permissions:
-  id-token: write
-  contents: read
-
 jobs:
-  s3-branch-test:
+  test:
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v2
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::640168414907:role/github-oidc-role
           aws-region: us-east-1
 
-      - name: Test Branch-Based S3 Access
-        env:
-          BRANCH: ${{ github.ref_name }}
-          REPO: ${{ github.repository }}
+      - name: Get OIDC Token and Call Lambda
         run: |
-          echo "Current repository: $REPO"
-          echo "Current branch: $BRANCH"
+          # Get OIDC Token
+          TOKEN=$(curl -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL" | jq -r '.value')
           
-          S3_PATH="$REPO/refs/heads/$BRANCH"
-          echo "Testing access to: $S3_PATH"
+          echo "Calling Lambda function..."
+          RESPONSE=$(aws lambda invoke \
+            --function-name GithubOIDCProxy \
+            --payload "{\"token\":\"$TOKEN\"}" \
+            --cli-binary-format raw-in-base64-out \
+            response.json)
           
-          echo "1. Testing write to own path..."
-          echo "test content from $REPO:$BRANCH" > test.txt
-          aws s3 cp test.txt "s3://test-github-oidc-bucket-20250625/$S3_PATH/test.txt"
+          echo "Lambda response:"
+          cat response.json
+          
+          # Extract and use credentials
+          CREDS=$(cat response.json | jq -r '.body' | jq -r '.')
+          export AWS_ACCESS_KEY_ID=$(echo $CREDS | jq -r '.AccessKeyId')
+          export AWS_SECRET_ACCESS_KEY=$(echo $CREDS | jq -r '.SecretAccessKey')
+          export AWS_SESSION_TOKEN=$(echo $CREDS | jq -r '.SessionToken')
+          
+          # Test S3 access
+          echo "Testing S3 access..."
+          echo "test content" > test.txt
+          aws s3 cp test.txt s3://test-github-oidc-bucket-20250625/${{ github.repository }}/refs/heads/${{ github.ref_name }}/test.txt
 
     
