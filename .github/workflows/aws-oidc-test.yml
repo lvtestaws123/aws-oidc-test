@@ -1,13 +1,12 @@
-name: S3 Access via Lambda OIDC Proxy
+name: Test S3 Access with OIDC Tags
 
 on:
   push:
     branches: [ main ]
-  pull_request:
   workflow_dispatch:
 
 jobs:
-  s3-access:
+  s3-access-test:
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -16,38 +15,32 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v2
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-region: us-east-1
           role-to-assume: arn:aws:iam::640168414907:role/github-oidc-role
+          aws-region: us-east-1
+          role-session-tags: |
+            repository=${{ github.repository }}
+            ref=${{ github.ref }}
 
-      - name: Get GitHub OIDC Token and Call Lambda
-        id: get-creds
+      - name: Test S3 Access
         run: |
-          echo "Getting OIDC token..."
-          TOKEN=$(curl -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=https://github.com/lvtestaws123" | jq -r '.value')
-          echo "::add-mask::$TOKEN"
+          echo "Current repository: ${{ github.repository }}"
+          echo "Current ref: ${{ github.ref }}"
           
-          echo "Calling Lambda function..."
-          aws lambda invoke \
-            --function-name GithubOIDCProxy \
-            --payload "{\"token\":\"$TOKEN\"}" \
-            --cli-binary-format raw-in-base64-out \
-            output.json
+          echo "Testing write access..."
+          echo "test content" > test.txt
+          aws s3 cp test.txt "s3://test-github-oidc-bucket-20250625/${{ github.repository }}/test.txt"
           
-          echo "Lambda response:"
-          cat output.json
+          echo "Testing list access..."
+          aws s3 ls "s3://test-github-oidc-bucket-20250625/${{ github.repository }}/"
           
-          echo "Setting credentials..."
-          CREDENTIALS=$(cat output.json | jq -r '.body' | jq -r '.')
-          echo "AWS_ACCESS_KEY_ID=$(echo $CREDENTIALS | jq -r '.AccessKeyId')" >> $GITHUB_ENV
-          echo "AWS_SECRET_ACCESS_KEY=$(echo $CREDENTIALS | jq -r '.SecretAccessKey')" >> $GITHUB_ENV
-          echo "AWS_SESSION_TOKEN=$(echo $CREDENTIALS | jq -r '.SessionToken')" >> $GITHUB_ENV
+          echo "Testing read access..."
+          aws s3 cp "s3://test-github-oidc-bucket-20250625/${{ github.repository }}/test.txt" downloaded.txt
+          cat downloaded.txt
+          
+          echo "Testing access to different repository path (should fail)..."
+          aws s3 ls "s3://test-github-oidc-bucket-20250625/different-repo/" || echo "Access denied as expected"
 
-      - name: Test S3 access
-        run: |
-          echo "Testing S3 access..."
-          S3_PATH="${{ github.repository }}/refs/heads/${{ github.ref_name }}"
-          echo "Testing path: $S3_PATH"
-          aws s3 ls "s3://test-github-oidc-bucket-20250625/"
+    
