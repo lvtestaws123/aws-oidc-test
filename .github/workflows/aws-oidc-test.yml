@@ -11,6 +11,9 @@ jobs:
     permissions:
       id-token: write
       contents: read
+    env:
+      REPOSITORY: ${{ github.repository }}
+      REF: ${{ github.ref }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -20,25 +23,24 @@ jobs:
         with:
           role-to-assume: arn:aws:iam::640168414907:role/github-oidc-role
           aws-region: us-east-1
-          role-session-tags: |
-            repository=${{ github.repository }}
-            ref=${{ github.ref }}
+          role-session-name: ${{ github.repository }}-${{ github.ref_name }}
 
       - name: Debug Session
         run: |
           echo "Checking AWS identity..."
           aws sts get-caller-identity
           
-          echo "Checking session tags..."
-          aws sts get-caller-identity --query 'ResponseMetadata.RequestId' --output text | xargs aws cloudtrail lookup-events --lookup-attributes AttributeKey=RequestId,AttributeValue=
+          echo "Environment variables:"
+          echo "REPOSITORY: $REPOSITORY"
+          echo "REF: $REF"
 
       - name: Test S3 Access
         run: |
-          echo "Current repository: ${{ github.repository }}"
-          echo "Current ref: ${{ github.ref }}"
-          
           echo "Testing write access..."
           echo "test content" > test.txt
-          aws s3 cp test.txt "s3://test-github-oidc-bucket-20250625/${{ github.repository }}/test.txt"
+          aws s3 cp test.txt "s3://test-github-oidc-bucket-20250625/$REPOSITORY/test.txt"
+          
+          echo "Testing list access..."
+          aws s3 ls "s3://test-github-oidc-bucket-20250625/$REPOSITORY/"
 
     
