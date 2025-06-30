@@ -1,30 +1,40 @@
-name: Basic S3 Test
+name: S3 Branch-Based Access Test
 
 on:
+  push:
+    branches: [ main, develop ]
   workflow_dispatch:
 
+permissions:
+  id-token: write
+  contents: read
+
 jobs:
-  test:
+  s3-branch-test:
     runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-      contents: read
     steps:
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
         with:
           role-to-assume: arn:aws:iam::640168414907:role/github-oidc-role
           aws-region: us-east-1
-          role-session-name: test-session
 
-      - name: Test Write
+      - name: Test Branch-Based S3 Access
+        env:
+          BRANCH: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
         run: |
-          echo "test" > test.txt
-          aws s3 cp test.txt s3://test-github-oidc-bucket-20250625/test.txt
-
-      - name: Test Read
-        if: success()
-        run: |
-          aws s3 ls s3://test-github-oidc-bucket-20250625/
+          echo "Current repository: $REPO"
+          echo "Current branch: $BRANCH"
+          
+          S3_PATH="$REPO/refs/heads/$BRANCH"
+          echo "Testing access to: $S3_PATH"
+          
+          echo "1. Testing write to own path..."
+          echo "test content from $REPO:$BRANCH" > test.txt
+          aws s3 cp test.txt "s3://test-github-oidc-bucket-20250625/$S3_PATH/test.txt"
 
     
