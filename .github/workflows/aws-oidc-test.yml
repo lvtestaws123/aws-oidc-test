@@ -1,4 +1,4 @@
-name: Test S3 Access with OIDC Tags
+name: Test S3 Access with OIDC Tags Debug
 
 on:
   push:
@@ -24,6 +24,14 @@ jobs:
             repository=${{ github.repository }}
             ref=${{ github.ref }}
 
+      - name: Debug Session
+        run: |
+          echo "Checking AWS identity..."
+          aws sts get-caller-identity
+          
+          echo "Checking session tags..."
+          aws sts get-caller-identity --query 'ResponseMetadata.RequestId' --output text | xargs aws cloudtrail lookup-events --lookup-attributes AttributeKey=RequestId,AttributeValue=
+
       - name: Test S3 Access
         run: |
           echo "Current repository: ${{ github.repository }}"
@@ -32,15 +40,5 @@ jobs:
           echo "Testing write access..."
           echo "test content" > test.txt
           aws s3 cp test.txt "s3://test-github-oidc-bucket-20250625/${{ github.repository }}/test.txt"
-          
-          echo "Testing list access..."
-          aws s3 ls "s3://test-github-oidc-bucket-20250625/${{ github.repository }}/"
-          
-          echo "Testing read access..."
-          aws s3 cp "s3://test-github-oidc-bucket-20250625/${{ github.repository }}/test.txt" downloaded.txt
-          cat downloaded.txt
-          
-          echo "Testing access to different repository path (should fail)..."
-          aws s3 ls "s3://test-github-oidc-bucket-20250625/different-repo/" || echo "Access denied as expected"
 
     
