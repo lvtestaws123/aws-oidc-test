@@ -1,4 +1,4 @@
-name: Test S3 Access with OIDC Tags Debug
+name: Test S3 Access with OIDC
 
 on:
   push:
@@ -23,7 +23,7 @@ jobs:
         with:
           role-to-assume: arn:aws:iam::640168414907:role/github-oidc-role
           aws-region: us-east-1
-          role-session-name: ${{ github.repository }}-${{ github.ref_name }}
+          role-session-name: ${{ github.repository_owner }}-${{ github.event.repository.name }}
 
       - name: Debug Session
         run: |
