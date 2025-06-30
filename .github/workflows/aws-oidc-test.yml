@@ -1,4 +1,4 @@
-name: Test S3 Access
+name: Test S3 Access - Basic
 
 on:
   workflow_dispatch:
@@ -15,18 +15,17 @@ jobs:
         with:
           role-to-assume: arn:aws:iam::640168414907:role/github-oidc-role
           aws-region: us-east-1
-          role-session-name: lvtestaws123-aws-oidc-test
+          role-session-name: test-session
 
-      - name: Test S3 Access
+      - name: Test Basic S3 Access
         run: |
           echo "1. List bucket contents:"
           aws s3 ls s3://test-github-oidc-bucket-20250625/
           
-          echo "2. Create test file:"
+          echo "2. Test write access:"
           echo "test content" > test.txt
+          aws s3 cp test.txt s3://test-github-oidc-bucket-20250625/test-write.txt
           
-          echo "3. Upload to repository path:"
-          aws s3 cp test.txt s3://test-github-oidc-bucket-20250625/lvtestaws123/test.txt
-          
-          echo "4. List repository path:"
-          aws s3 ls s3://test-github-oidc-bucket-20250625/lvtestaws123/
+          echo "3. Test read access:"
+          aws s3 cp s3://test-github-oidc-bucket-20250625/test-write.txt ./downloaded.txt
+          cat ./downloaded.txt
