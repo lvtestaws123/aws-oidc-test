@@ -1,4 +1,4 @@
-name: Debug S3 Access
+name: Test S3 Access with Managed Policy
 
 on:
   workflow_dispatch:
@@ -22,8 +22,18 @@ jobs:
           echo "1. Identity Check:"
           aws sts get-caller-identity
           
-          echo "2. Simple Write Test:"
-          date > test.txt
-          aws s3 cp test.txt s3://test-github-oidc-bucket-20250625/test.txt
+          echo "2. List Bucket:"
+          aws s3 ls s3://test-github-oidc-bucket-20250625/
+          
+          echo "3. Simple Write Test:"
+          echo "test content $(date)" > test.txt
+          aws s3 cp test.txt s3://test-github-oidc-bucket-20250625/test-$(date +%s).txt
+
+      - name: Test Repository Path
+        if: success()
+        run: |
+          echo "4. Testing repository-specific path:"
+          echo "repo test content" > repo-test.txt
+          aws s3 cp repo-test.txt s3://test-github-oidc-bucket-20250625/lvtestaws123/aws-oidc-test/test.txt
 
     
