@@ -1,48 +1,58 @@
-name: Test Lambda OIDC Proxy
+name: Test S3 Access with OIDC
 
 on:
   workflow_dispatch:
 
+env:
+  AWS_REGION: us-east-1
+  S3_BUCKET_NAME: test-github-oidc-bucket-20250625
+
 jobs:
-  test:
+  s3-access-test:
     runs-on: ubuntu-latest
     permissions:
       id-token: write
       contents: read
     steps:
-      - name: Configure AWS Credentials
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::640168414907:role/github-oidc-role
-          aws-region: us-east-1
+          aws-region: ${{ env.AWS_REGION }}
 
-      - name: Test Lambda Proxy
+      - name: Test S3 Access
+        env:
+          REPO: ${{ github.repository }}
+          BRANCH: ${{ github.ref_name }}
         run: |
-          echo "Getting OIDC token..."
-          TOKEN=$(curl -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r '.value')
+          echo "=== Testing from $REPO ==="
+          echo ""
           
-          echo "Calling Lambda..."
-          RESPONSE=$(aws lambda invoke \
-            --function-name GithubOIDCProxy \
-            --payload "{\"token\":\"$TOKEN\"}" \
-            --cli-binary-format raw-in-base64-out \
-            output.json)
-            
-          echo "Lambda response:"
-          cat output.json
+          S3_PATH="$REPO/refs/heads/$BRANCH"
+          echo "S3 Path: $S3_PATH"
           
-          if [ -f output.json ]; then
-            CREDS=$(cat output.json | jq -r '.body' | jq -r '.')
-            export AWS_ACCESS_KEY_ID=$(echo $CREDS | jq -r '.AccessKeyId')
-            export AWS_SECRET_ACCESS_KEY=$(echo $CREDS | jq -r '.SecretAccessKey')
-            export AWS_SESSION_TOKEN=$(echo $CREDS | jq -r '.SessionToken')
-            
-            echo "Testing S3 access with Lambda-provided credentials..."
-            echo "test content" > test.txt
-            aws s3 cp test.txt "s3://test-github-oidc-bucket-20250625/${{ github.repository }}/refs/heads/${{ github.ref_name }}/test.txt"
-          else
-            echo "No output.json file found"
-            exit 1
-          fi
+          echo "1. Testing write access..."
+          echo "test content from $REPO" > test.txt
+          aws s3 cp test.txt "s3://$S3_BUCKET_NAME/$S3_PATH/test.txt"
+          
+          echo "2. Testing read access..."
+          aws s3 cp "s3://$S3_BUCKET_NAME/$S3_PATH/test.txt" ./downloaded.txt
+          cat ./downloaded.txt
+          
+          echo "3. Testing list access..."
+          aws s3 ls "s3://$S3_BUCKET_NAME/$S3_PATH/"
+          
+          echo "4. Testing access to different branch..."
+          OTHER_BRANCH="develop"
+          OTHER_PATH="$REPO/refs/heads/$OTHER_BRANCH"
+          aws s3 ls "s3://$S3_BUCKET_NAME/$OTHER_PATH/" || echo "Access to different branch not allowed (expected)"
+          
+          echo "5. Testing access to different repository..."
+          OTHER_REPO="SonarSource/different-repo"
+          OTHER_PATH="$OTHER_REPO/refs/heads/$BRANCH"
+          aws s3 ls "s3://$S3_BUCKET_NAME/$OTHER_PATH/" || echo "Access to different repository not allowed (expected)"
 
     
